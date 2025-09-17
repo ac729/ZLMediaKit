@@ -2,6 +2,9 @@ name: Linux
 
 on: [push, pull_request]
 
+permissions:
+  contents: write
+
 jobs:
   build:
 
@@ -113,3 +116,13 @@ jobs:
         path: release/*
         if-no-files-found: error
         retention-days: 90
+
+    - name: 发布到 GitHub Release
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v2
+      with:
+        files: |
+          release/*
+        make_latest: true
+        draft: false
+        prerelease: false

@@ -68,12 +68,14 @@ static void fill_random_yuv420(uint8_t *y, uint8_t *u, uint8_t *v, int width, in
     uint8_t U = (uint8_t)(rand() % 256);
     uint8_t V = (uint8_t)(rand() % 256);
 
-    for (int i = 0; i < height; ++i) {
+    int i;
+    for (i = 0; i < height; ++i) {
         memset(y + i * stride_y, Y, width);
     }
     int cw = width / 2;
     int ch = height / 2;
-    for (int j = 0; j < ch; ++j) {
+    int j;
+    for (j = 0; j < ch; ++j) {
         memset(u + j * stride_u, U, cw);
         memset(v + j * stride_v, V, cw);
     }
