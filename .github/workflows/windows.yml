@@ -38,31 +38,42 @@ jobs:
           echo "BRANCH2=$branch2" >> $env:GITHUB_ENV
           echo "DATE=$dateString" >> $env:GITHUB_ENV
 
-      - name: 打包二进制
-        id: upload
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ github.workflow }}_${{ env.BRANCH }}_${{ env.DATE }}
-          path: release/*
-          if-no-files-found: error
-          retention-days: 90
+      - name: 打包静态库
+        shell: pwsh
+        run: |
+          $sourceDir = Join-Path $env:GITHUB_WORKSPACE "release/windows/Release"
+          if (-not (Test-Path $sourceDir)) {
+            Write-Error "目录 $sourceDir 不存在"
+          }
+          $libs = Get-ChildItem -Path $sourceDir -Filter *.lib
+          if (-not $libs) {
+            Write-Error "未找到静态库文件 (*.lib)"
+          }
+          $archivePath = Join-Path $env:GITHUB_WORKSPACE ("release/windows_static_libs_{0}_{1}.zip" -f $env:BRANCH, $env:DATE)
+          if (Test-Path $archivePath) {
+            Remove-Item $archivePath
+          }
+          Compress-Archive -Path $libs.FullName -DestinationPath $archivePath
 
-      - name: issue评论
-        if: github.event_name != 'pull_request' && github.ref != 'refs/heads/feature/test'
-        uses: actions/github-script@v7
+      - name: 创建 Release
+        id: create_release
+        if: github.event_name != 'pull_request'
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            github.rest.issues.createComment({
-              issue_number: ${{vars.VERSION_ISSUE_NO}},
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: '- 下载地址: [${{ github.workflow }}_${{ env.BRANCH }}_${{ env.DATE }}](${{ steps.upload.outputs.artifact-url }})\n'
-                + '- 分支: ${{ env.BRANCH2 }}\n' 
-                + '- git hash: ${{ github.sha }} \n' 
-                + '- 编译日期: ${{ env.DATE }}\n' 
-                + '- 编译记录: [${{ github.run_id }}](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})\n'
-                + '- 打包ci名: ${{ github.workflow }}\n' 
-                + '- 开启特性: openssl/webrtc/datachannel\n'
-                + '- 说明: 此二进制为x64版本\n' 
-            })
+          tag_name: nightly-${{ github.run_id }}
+          release_name: Windows ${{ env.BRANCH }} 静态库 ${{ env.DATE }}
+          draft: false
+          prerelease: true
+
+      - name: 上传静态库到 Release
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: release/windows_static_libs_${{ env.BRANCH }}_${{ env.DATE }}.zip
+          asset_name: windows_static_libs_${{ env.BRANCH }}_${{ env.DATE }}.zip
+          asset_content_type: application/zip
